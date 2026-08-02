@@ -26,12 +26,12 @@ BlackArch
 ## Usage (KDE Plasma)
 
 ```sh
-./BlackArchPlasmaMenuTool.py               # install for the current user
-./BlackArchPlasmaMenuTool.py --dry-run -v  # show what would be written, change nothing
-./BlackArchPlasmaMenuTool.py --system      # install for all users (needs root)
-./BlackArchPlasmaMenuTool.py --fix-dirty   # reinstall, clearing a stuck menu state
-./BlackArchPlasmaMenuTool.py --nested      # answer the launcher question up front
-./BlackArchPlasmaMenuTool.py --uninstall   # remove everything it generated
+./BlackArchPlasmaMenuTool.py                      # print usage
+./BlackArchPlasmaMenuTool.py --install            # install for the current user
+./BlackArchPlasmaMenuTool.py --install --dry-run  # show what would change, change nothing
+./BlackArchPlasmaMenuTool.py --system             # install for all users (needs root)
+./BlackArchPlasmaMenuTool.py --fix-dirty          # clear a stuck menu state, no reinstall
+./BlackArchPlasmaMenuTool.py --uninstall          # remove everything it generated
 ```
 
 Requires Python 3.9+ and `pacman`. No third-party modules.
@@ -53,8 +53,8 @@ nested `BlackArch` menu shows up there as a single undivided category of 100+ to
 with no groups in sight. The Cinnamon menu applet behaves the same way. Swap
 launchers by right clicking the start button → *Show Alternatives*.
 
-`--nested` and `--flat` answer the question up front; a non-interactive run takes
-the flat shape, which every launcher can draw.
+`--install` and `--system` ask this every time; `--fix-dirty` and `--uninstall`
+never do. A non-interactive run takes the flat shape, which every launcher draws.
 
 ## When the menu will not appear
 
@@ -74,8 +74,10 @@ undoes all of it:
   whole by the menu builder, so one stale broken fragment can take working entries
   down with it. Broken `blackarch*.menu` files are renamed to `.disabled` rather
   than deleted.
-* **Stale caches.** `~/.cache/ksycoca*` is cleared and rebuilt from scratch with
-  `kbuildsycoca --noincremental`.
+
+The menu cache is then rebuilt from scratch with `kbuildsycoca --noincremental`.
+The cache files themselves are never deleted: removing the live one out from under
+a running Plasma session leaves it with no menu at all until it is rebuilt.
 
 Every edited file is backed up alongside itself as `.bak`, and each repair is
 printed. Under `sudo`, the repair and the cache rebuild are applied to the desktop
@@ -96,8 +98,7 @@ For a user-level install:
 `--uninstall` removes all of the above. Nothing outside these paths is touched,
 and no system files are modified. No helper scripts or wrappers are generated.
 
-`--fix-dirty` additionally edits `~/.config/menus/*.menu` and clears
-`~/.cache/ksycoca*` — see [When the menu will not appear](#when-the-menu-will-not-appear).
+`--fix-dirty` additionally edits `~/.config/menus/*.menu` — see [When the menu will not appear](#when-the-menu-will-not-appear).
 
 ## How tools are launched
 
@@ -134,7 +135,7 @@ to expand every group down to its individual tools. The counts are only there to
 show what was detected — they do not appear in the real menu.
 
 ```
-$ ./BlackArchPlasmaMenuTool.py --dry-run --nested
+$ ./BlackArchPlasmaMenuTool.py --install --dry-run
 Menu structure will look as follows:
 
 *BlackArch*

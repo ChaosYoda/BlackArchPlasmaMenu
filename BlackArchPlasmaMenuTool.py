@@ -10,11 +10,11 @@ Installing asks which launcher is on the panel, because only the cascading
 Application Menu draws submenus; Application Launcher needs the groups flat.
 
 Usage:
-    ./BlackArchPlasmaMenuTool.py                 # install for the current user
-    ./BlackArchPlasmaMenuTool.py --dry-run -v    # show what would be written
+    ./BlackArchPlasmaMenuTool.py                 # print this usage
+    ./BlackArchPlasmaMenuTool.py --install       # install for the current user
+    ./BlackArchPlasmaMenuTool.py --install -v --dry-run   # show what would change
     ./BlackArchPlasmaMenuTool.py --system        # install for all users (needs root)
-    ./BlackArchPlasmaMenuTool.py --nested        # answer the launcher question up front
-    ./BlackArchPlasmaMenuTool.py --fix-dirty     # reinstall, clearing a stuck menu state
+    ./BlackArchPlasmaMenuTool.py --fix-dirty     # clear a stuck menu state, no reinstall
     ./BlackArchPlasmaMenuTool.py --uninstall     # remove everything it generated
 
 Install more tools with `sudo pacman -S blackarch-<group>`, then re-run this
@@ -78,7 +78,7 @@ def ask_nested() -> bool:
         choice = input(LAUNCHER_PROMPT).strip() or "1"
         if choice in ("1", "2"):
             return choice == "2"
-        print("Enter 1 or 2, or pass --flat/--nested to skip this.\n")
+        print("Enter 1 or 2.\n")
 
 
 def refresh_commands(layout: Layout, full: bool) -> list[list[str]]:
@@ -99,6 +99,11 @@ def main() -> int:
         description="Generate KDE Plasma menu entries for installed BlackArch tools.",
     )
     parser.add_argument(
+        "--install",
+        action="store_true",
+        help="write the menu for the tools installed right now",
+    )
+    parser.add_argument(
         "--system",
         action="store_true",
         help="install for all users under /usr/share (requires root)",
@@ -113,17 +118,6 @@ def main() -> int:
         action="store_true",
         help="Fix dirty menu state where the new menu might not show correctly",
     )
-    shape = parser.add_mutually_exclusive_group()
-    shape.add_argument(
-        "--flat",
-        action="store_true",
-        help="groups at the top level, for Application Launcher (skips the question)",
-    )
-    shape.add_argument(
-        "--nested",
-        action="store_true",
-        help="groups inside one BlackArch menu, for Application Menu (skips the question)",
-    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -136,6 +130,12 @@ def main() -> int:
         help="expand the tree to every tool, and list each file written or removed",
     )
     args = parser.parse_args()
+
+    installing = args.install or args.system
+    if not (installing or args.uninstall or args.fix_dirty):
+        # Nothing was asked for. Writing a menu is not what a bare run should do.
+        parser.print_help()
+        return 0
 
     session = Session.detect()
     layout = (
@@ -163,7 +163,7 @@ def main() -> int:
             if args.verbose:
                 for path in needs_root:
                     print(f"  {path}")
-    else:
+    elif installing:
         if not args.dry_run:
             require_writable(layout)
         generator = Generator(layout, dry_run=args.dry_run, verbose=args.verbose)
@@ -180,7 +180,7 @@ def main() -> int:
             )
             return 1
 
-        nested = args.nested or (not args.flat and ask_nested())
+        nested = ask_nested()
         generator.generate(tools, root_menu_name=ROOT_MENU_NAME, nested=nested)
         summarise(tools, skipped, show_tools=args.verbose, nested=nested)
         verb = "Dry run:" if args.dry_run else "Wrote"
@@ -198,7 +198,7 @@ def main() -> int:
     refresh_caches(
         refresh_commands(layout, args.fix_dirty), dry_run=args.dry_run, session=session
     )
-    if not args.dry_run and not args.uninstall:
+    if not args.dry_run and installing:
         print("Menu rebuilt. If it has not appeared, log out and back in.")
     return 0
 

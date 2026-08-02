@@ -770,7 +770,14 @@ class Generator:
         if self.layout.directories.is_dir():
             targets.append(self.layout.directories / self.ROOT_DIRECTORY)
             targets += sorted(self.layout.directories.glob("blackarch-*.directory"))
-        return [path for path in dict.fromkeys(targets) if path.exists()]
+        # Dedupe by what a path points at, not by how it is spelled: distros ship
+        # cinnamon-applications-merged as a symlink to applications-merged, so one
+        # fragment turns up twice and the second unlink would fail.
+        unique: dict[Path, Path] = {}
+        for path in targets:
+            if path.exists():
+                unique.setdefault(path.resolve(), path)
+        return list(unique.values())
 
     def uninstall(self) -> list[Path]:
         removed = self.installed_paths()
@@ -889,9 +896,11 @@ def refresh_caches(
 # repairing a dirty menu state
 # --------------------------------------------------------------------------- #
 
-# The generated files are only half the story: a desktop's menu editor, its cache
-# and any stale fragment left lying around all sit downstream of them and can each
-# hide a menu that was written perfectly. `repair()` walks those four sources.
+# The generated files are only half the story: a desktop's menu editor and any
+# stale fragment left lying around both sit downstream of them and can hide a menu
+# that was written perfectly. The caches are deliberately not touched -- deleting
+# the live one while the desktop is running leaves the session with no menu at all
+# until it is rebuilt, and a --noincremental rebuild does the same job safely.
 #
 # The worst of them is the menu editor. plasma-applications.menu ends with
 # <MergeFile>applications-kmenuedit.menu</MergeFile>, so whatever kmenuedit saved
@@ -901,10 +910,7 @@ def refresh_caches(
 # <Deleted/>, and from then on regenerating cannot bring them back, because
 # <Deleted/> also hides them from the editor: there is nothing left in the UI to
 # undelete.
-# Caches keyed by a hash of the XDG paths, so a stale one lingers per path set.
-CACHE_PATTERNS = ["ksycoca5*", "ksycoca6*"]
-
-
+#
 # kmenuedit hides a single entry by excluding its .desktop from the menu it lives
 # in and filing it under a menu literally named ".hidden"; it hides a whole submenu
 # with <Deleted/>. Both survive a reinstall, so both have to be undone here.
@@ -1068,24 +1074,12 @@ class Repair:
                 if not self.dry_run:
                     fragment.replace(disabled)
 
-    def clear_caches(self) -> None:
-        """Delete the menu caches so the next rebuild starts from the files."""
-        cache = self.session.cache
-        if not cache.is_dir():
-            return
-        for pattern in CACHE_PATTERNS:
-            for path in sorted(cache.glob(pattern)):
-                self._note(f"cleared cache {path}")
-                if not self.dry_run:
-                    path.unlink(missing_ok=True)
-
     # -- driver ------------------------------------------------------------ #
 
     def run(self) -> list[str]:
         self.undo_editor_overrides()
         self.unhide_entries()
         self.disable_broken_fragments()
-        self.clear_caches()
         return self.actions
 
 
