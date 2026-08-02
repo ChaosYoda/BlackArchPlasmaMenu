@@ -871,16 +871,20 @@ def refresh_caches(
 ) -> None:
     """Run the DE's menu-cache rebuilders, ignoring ones that are not installed.
 
-    Under sudo these are re-run as the desktop user: kbuildsycoca rebuilds the
-    cache of whoever invokes it, so running it as root leaves the user's launcher
-    showing exactly what it showed before.
+    Under sudo they are printed rather than run. kbuildsycoca rebuilds the cache of
+    whoever invokes it, and the cache file is keyed by a hash of the XDG paths --
+    which sudo does not carry over -- so a root-side rebuild writes a cache the
+    session never reads and cannot notify the running shell that it changed. Doing
+    it anyway is how a system-wide install ends up with an empty launcher.
     """
     session = session or Session.detect()
-    for command in commands:
-        if shutil.which(command[0]) is None:
-            continue
-        if session.elevated and shutil.which("runuser"):
-            command = ["runuser", "-u", session.name, "--", *command]
+    runnable = [command for command in commands if shutil.which(command[0])]
+    if session.elevated:
+        print("\nRun these as your desktop user to pick the menu up:")
+        for command in runnable:
+            print(f"  {' '.join(command)}")
+        return
+    for command in runnable:
         if dry_run:
             print(f"  would run: {' '.join(command)}")
             continue

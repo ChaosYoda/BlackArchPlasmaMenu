@@ -198,7 +198,7 @@ def main() -> int:
     refresh_caches(
         refresh_commands(layout, args.fix_dirty), dry_run=args.dry_run, session=session
     )
-    if not args.dry_run and installing:
+    if not args.dry_run and installing and not session.elevated:
         print("Menu rebuilt. If it has not appeared, log out and back in.")
     return 0
 
