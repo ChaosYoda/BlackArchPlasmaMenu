@@ -6,10 +6,14 @@ BlackArch group (Exploitation, Wireless, Recon, ...), each listing the tools fro
 that group that are actually installed on this system. Group membership and
 installed state both come from pacman, so the menu only ever shows tools you have.
 
+Installing asks which launcher is on the panel, because only the cascading
+Application Menu draws submenus; Application Launcher needs the groups flat.
+
 Usage:
     ./BlackArchPlasmaMenuTool.py                 # install for the current user
     ./BlackArchPlasmaMenuTool.py --dry-run -v    # show what would be written
     ./BlackArchPlasmaMenuTool.py --system        # install for all users (needs root)
+    ./BlackArchPlasmaMenuTool.py --nested        # answer the launcher question up front
     ./BlackArchPlasmaMenuTool.py --fix-dirty     # reinstall, clearing a stuck menu state
     ./BlackArchPlasmaMenuTool.py --uninstall     # remove everything it generated
 
@@ -51,6 +55,31 @@ MENU_CACHE_COMMANDS = [["kbuildsycoca6"], ["kbuildsycoca5"]]
 # the cache has to be rebuilt from scratch or the stale menu simply comes back.
 FULL_REBUILD_FLAG = "--noincremental"
 
+# Which shape the menu takes is not ours to guess: it depends on the launcher the
+# user has on their panel, and picking wrong is silently wrong -- nested groups do
+# not render in Kickoff, and flat ones needlessly clutter a launcher that could
+# have nested them.
+LAUNCHER_PROMPT = """\
+Which launcher is on your panel? (right click the start button -> Show Alternatives)
+
+  1) Application Launcher -- the Plasma default. Draws top-level categories only,
+     so the groups have to be installed flat, as "BlackArch Wireless" and so on.
+  2) Application Menu -- the cascading one. Draws submenus, so the groups can sit
+     inside a single "BlackArch" menu.
+
+Choice [1]: """
+
+
+def ask_nested() -> bool:
+    """Ask which launcher is in use. True when it can render submenus."""
+    if not sys.stdin.isatty():
+        return False  # unattended: flat is the shape every launcher draws
+    while True:
+        choice = input(LAUNCHER_PROMPT).strip() or "1"
+        if choice in ("1", "2"):
+            return choice == "2"
+        print("Enter 1 or 2, or pass --flat/--nested to skip this.\n")
+
 
 def refresh_commands(layout: Layout, full: bool) -> list[list[str]]:
     commands = [
@@ -84,11 +113,16 @@ def main() -> int:
         action="store_true",
         help="Fix dirty menu state where the new menu might not show correctly",
     )
-    parser.add_argument(
+    shape = parser.add_mutually_exclusive_group()
+    shape.add_argument(
+        "--flat",
+        action="store_true",
+        help="groups at the top level, for Application Launcher (skips the question)",
+    )
+    shape.add_argument(
         "--nested",
         action="store_true",
-        help="put the groups under one BlackArch menu instead of at the top level "
-        "(tidier, but Kickoff and Cinnamon do not draw nested submenus)",
+        help="groups inside one BlackArch menu, for Application Menu (skips the question)",
     )
     parser.add_argument(
         "--dry-run",
@@ -146,8 +180,9 @@ def main() -> int:
             )
             return 1
 
-        generator.generate(tools, root_menu_name=ROOT_MENU_NAME, nested=args.nested)
-        summarise(tools, skipped, show_tools=args.verbose, nested=args.nested)
+        nested = args.nested or (not args.flat and ask_nested())
+        generator.generate(tools, root_menu_name=ROOT_MENU_NAME, nested=nested)
+        summarise(tools, skipped, show_tools=args.verbose, nested=nested)
         verb = "Dry run:" if args.dry_run else "Wrote"
         suffix = " would be written" if args.dry_run else ""
         print(f"\n{verb} {len(generator.written)} file(s){suffix}.")

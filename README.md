@@ -9,14 +9,14 @@ shows a tool you do not have. Install more with `sudo pacman -S blackarch-<group
 and re-run the generator to pick them up.
 
 ```
-Application launcher
-├── BlackArch Automation
-├── BlackArch Bluetooth
-├── BlackArch Cracker
+BlackArch
+├── Automation
+├── Bluetooth
+├── Cracker
 │   ├── asleap
 │   ├── auto-eap
 │   └── ...
-├── BlackArch DoS
+├── DoS
 │   ├── hwk
 │   ├── slowloris
 │   └── ...
@@ -30,7 +30,7 @@ Application launcher
 ./BlackArchPlasmaMenuTool.py --dry-run -v  # show what would be written, change nothing
 ./BlackArchPlasmaMenuTool.py --system      # install for all users (needs root)
 ./BlackArchPlasmaMenuTool.py --fix-dirty   # reinstall, clearing a stuck menu state
-./BlackArchPlasmaMenuTool.py --nested      # one BlackArch menu with the groups inside
+./BlackArchPlasmaMenuTool.py --nested      # answer the launcher question up front
 ./BlackArchPlasmaMenuTool.py --uninstall   # remove everything it generated
 ```
 
@@ -39,18 +39,22 @@ Requires Python 3.9+ and `pacman`. No third-party modules.
 The umbrella `blackarch` group is skipped on purpose — it contains every tool in
 the repo and would duplicate the whole tree into a single unusable submenu.
 
-## Note for Plasma
+## Which launcher are you using?
 
-Plasma's **Kickoff** ("Application Launcher") and the **Cinnamon** menu applet only
-draw *top-level* categories. Anything nested below one is flattened away, so a
-single `BlackArch` parent menu shows up as one undivided category of 100+ tools
-with no groups in sight.
+Installing asks, because the answer changes the shape of the menu:
 
-The groups are therefore installed at the top level by default, named
-`BlackArch <Group>`, which every launcher can render. `--nested` puts them back
-under one `BlackArch` parent — tidier, and fine if you use a cascading launcher
-(right click the start button → *Show Alternatives* → *Application Menu*) or
-`kmenuedit`, but the groups will not appear in Kickoff or Cinnamon.
+| Launcher | Menu shape |
+| --- | --- |
+| **Application Menu** (the cascading one) | groups nested inside one `BlackArch` menu |
+| **Application Launcher** (Kickoff, the Plasma default) | groups at the top level, named `BlackArch Wireless`, `BlackArch Cracker`, ... |
+
+Kickoff draws *top-level* categories only and flattens anything below one, so a
+nested `BlackArch` menu shows up there as a single undivided category of 100+ tools
+with no groups in sight. The Cinnamon menu applet behaves the same way. Swap
+launchers by right clicking the start button → *Show Alternatives*.
+
+`--nested` and `--flat` answer the question up front; a non-interactive run takes
+the flat shape, which every launcher can draw.
 
 ## When the menu will not appear
 
@@ -130,16 +134,16 @@ to expand every group down to its individual tools. The counts are only there to
 show what was detected — they do not appear in the real menu.
 
 ```
-$ ./BlackArchPlasmaMenuTool.py --dry-run
+$ ./BlackArchPlasmaMenuTool.py --dry-run --nested
 Menu structure will look as follows:
 
-*Application launcher*
-├── BlackArch Automation (4 tools)
-├── BlackArch Bluetooth (2 tools)
-├── BlackArch Cracker (16 tools)
-├── BlackArch DoS (4 tools)
+*BlackArch*
+├── Automation (4 tools)
+├── Bluetooth (2 tools)
+├── Cracker (16 tools)
+├── DoS (4 tools)
 ...
-└── BlackArch Wireless (91 tools)
+└── Wireless (91 tools)
 
 23 submenus, 106 tools (191 entries; tools in several groups appear in each).
 ```
