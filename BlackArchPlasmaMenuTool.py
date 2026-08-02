@@ -166,7 +166,9 @@ def main() -> int:
     elif installing:
         if not args.dry_run:
             require_writable(layout)
-        generator = Generator(layout, dry_run=args.dry_run, verbose=args.verbose)
+        generator = Generator(
+            layout, session=session, dry_run=args.dry_run, verbose=args.verbose
+        )
         try:
             tools, skipped = collect_tools()
         except PacmanError as exc:

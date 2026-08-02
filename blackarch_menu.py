@@ -590,8 +590,15 @@ class Generator:
     # ("Applications") naming the menu we graft onto.
     MENU_ID = "BlackArch"
 
-    def __init__(self, layout: Layout, dry_run: bool = False, verbose: bool = False):
+    def __init__(
+        self,
+        layout: Layout,
+        session: "Session | None" = None,
+        dry_run: bool = False,
+        verbose: bool = False,
+    ):
         self.layout = layout
+        self.session = session or Session.detect()
         self.dry_run = dry_run
         self.verbose = verbose
         self.written: list[Path] = []
@@ -606,6 +613,9 @@ class Generator:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+        # `sudo` without --system still writes into the desktop user's home, so
+        # give the files back rather than leaving root-owned ones behind.
+        self.session.claim(path)
 
     def exec_line(self, tool: Tool) -> str:
         kind, value = tool.exec_command[0], tool.exec_command[1]
@@ -861,9 +871,15 @@ class Session:
         return self._xdg("XDG_DATA_HOME", ".local/share")
 
     def claim(self, path: Path) -> None:
-        """Hand a file we wrote as root back to the user who owns the home dir."""
-        if self.elevated:
+        """Hand anything we wrote as root back to the user who owns the home dir.
+
+        Walks up to the home directory, because the parent directories may have
+        been created by the same root-side run. A file left owned by root locks
+        the user out of every later unprivileged run.
+        """
+        while self.elevated and self.home in path.parents:
             os.chown(path, self.uid, self.gid)
+            path = path.parent
 
 
 def refresh_caches(
@@ -888,12 +904,18 @@ def refresh_caches(
         if dry_run:
             print(f"  would run: {' '.join(command)}")
             continue
-        subprocess.run(
+        result = subprocess.run(
             command,
             check=False,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+        if result.returncode != 0:
+            # Silently swallowing this is how a failed rebuild looks identical to
+            # a successful one from the outside.
+            detail = result.stderr.strip().splitlines()
+            print(f"warning: {command[0]} failed: {detail[-1] if detail else ''}")
 
 
 # --------------------------------------------------------------------------- #
@@ -1147,3 +1169,15 @@ def summarise(
 def require_writable(layout: Layout) -> None:
     if layout.system_wide and os.geteuid() != 0:
         sys.exit("System-wide install needs root. Re-run with sudo, or drop --system.")
+    for target in (layout.applications, layout.directories, *layout.merge_dirs):
+        # Nothing under a user install is created until write time, so check the
+        # nearest directory that does exist.
+        existing = target
+        while not existing.exists():
+            existing = existing.parent
+        if not os.access(existing, os.W_OK):
+            sys.exit(
+                f"{existing} is not writable by you. An earlier run under sudo "
+                f"most likely left it owned by another user; hand it back with:\n"
+                f"  sudo chown -R $USER: {existing}"
+            )

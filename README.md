@@ -80,10 +80,12 @@ The cache files themselves are never deleted: removing the live one out from und
 a running Plasma session leaves it with no menu at all until it is rebuilt.
 
 Every edited file is backed up alongside itself as `.bak`, and each repair is
-printed. Under `sudo`, the repair and the cache rebuild are applied to the desktop
-user's home rather than root's — running `kbuildsycoca` as root rebuilds root's
-cache and leaves your launcher unchanged, which is a common reason `--system`
-appears to do nothing.
+printed. Under `sudo` the repair still targets the desktop user's home, but the
+cache rebuild is **printed for you to run yourself** rather than executed: the
+cache file is keyed by a hash of the XDG paths, which `sudo` does not carry over,
+so a root-side rebuild writes a cache your session never reads and cannot tell the
+running shell to reload. That is how a system-wide install ends up with an empty
+Plasma launcher — Cinnamon is unaffected, because it does not use `ksycoca`.
 
 ## What gets written
 
